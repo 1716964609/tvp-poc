@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: job-asset-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: job-asset-service
+  template:
+    metadata:
+      labels:
+        app: job-asset-service
+    spec:
+      containers:
+        - name: job-asset-service
+          image: 180294215932.dkr.ecr.ap-northeast-1.amazonaws.com/tvp/job-asset-service:v1
+          ports:
+            - containerPort: 8080
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: job-asset-service
+spec:
+  selector:
+    app: job-asset-service
+  ports:
+    - port: 80
+      targetPort: 8080
+  type: ClusterIP

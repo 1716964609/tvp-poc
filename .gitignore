@@ -1,0 +1,19 @@
+.DS_Store
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+
+# Local secrets / credentials
+.env
+.env.*
+*.pem
+*.key
