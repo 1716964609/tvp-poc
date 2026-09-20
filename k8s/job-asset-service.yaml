@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: job-asset-service
-          image: 180294215932.dkr.ecr.ap-northeast-1.amazonaws.com/tvp/job-asset-service:v1
+          image: 180294215932.dkr.ecr.ap-northeast-1.amazonaws.com/tvp/job-asset-service:2777ca51f40ae1654f17ef9500f7d9d295e0ee2c
           ports:
             - containerPort: 8080
 
