@@ -1,0 +1,8 @@
+name: job-asset-service
+type: web
+
+port: 8080
+replicas: 1
+
+build:
+  strategy: dockerfile

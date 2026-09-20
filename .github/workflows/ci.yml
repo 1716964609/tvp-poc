@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'job-asset-service/**'
+      - 'platform/**'
       - '.github/workflows/ci.yml'
   workflow_dispatch:
 
@@ -87,30 +88,18 @@ jobs:
         run: |
           docker push "$IMAGE_URI"
 
-      - name: Update GitOps desired state
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install platform dependencies
         run: |
-          python3 <<'PY'
-          from pathlib import Path
-          import os
-          import re
+          python -m pip install -r platform/requirements.txt
 
-          path = Path("k8s/job-asset-service.yaml")
-          text = path.read_text()
-
-          image = os.environ["IMAGE_URI"]
-
-          updated, count = re.subn(
-              r'(?m)^(\s*image:\s*).+$',
-              lambda m: m.group(1) + image,
-              text,
-              count=1
-          )
-
-          if count != 1:
-              raise SystemExit("Could not uniquely update container image")
-
-          path.write_text(updated)
-          PY
+      - name: Render desired state from platform contract
+        run: |
+          python platform/render.py
 
       - name: Commit desired state
         run: |

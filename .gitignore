@@ -17,3 +17,8 @@ crash.*.log
 .env.*
 *.pem
 *.key
+
+# Python
+.venv/
+__pycache__/
+*.pyc
