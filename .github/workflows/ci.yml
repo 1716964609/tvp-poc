@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ap-northeast-1
+  AWS_ACCOUNT_ID: "180294215932"
+  ECR_REPOSITORY: tvp/job-asset-service
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::180294215932:role/tvp-github-actions-ci
+          aws-region: ap-northeast-1
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region "$AWS_REGION" \
+            | docker login \
+                --username AWS \
+                --password-stdin \
+                "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+
+      - name: Build image
+        run: |
+          IMAGE_URI="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$GITHUB_SHA"
+
+          docker build \
+            -t "$IMAGE_URI" \
+            ./job-asset-service
+
+          echo "IMAGE_URI=$IMAGE_URI" >> "$GITHUB_ENV"
+
+      - name: Verify image architecture
+        run: |
+          docker image inspect "$IMAGE_URI" \
+            --format 'architecture={{.Architecture}} os={{.Os}}'
+
+      - name: Smoke test container
+        run: |
+          docker run \
+            --rm \
+            -d \
+            --name job-asset-service-ci \
+            -p 8080:8080 \
+            "$IMAGE_URI"
+
+          for i in $(seq 1 20); do
+            if curl --fail http://localhost:8080/health; then
+              exit 0
+            fi
+
+            sleep 1
+          done
+
+          docker logs job-asset-service-ci
+          exit 1
+
+      - name: Stop smoke test container
+        if: always()
+        run: |
+          docker stop job-asset-service-ci || true
+
+      - name: Push image to ECR
+        run: |
+          docker push "$IMAGE_URI"
