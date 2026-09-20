@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: job-asset-service
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: job-asset-service
@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: job-asset-service
-          image: 180294215932.dkr.ecr.ap-northeast-1.amazonaws.com/tvp/job-asset-service:45a426c6be53532db3cb6686ef38a8643fd79226
+          image: 180294215932.dkr.ecr.ap-northeast-1.amazonaws.com/tvp/job-asset-service:78805edbdcced008729e50ec8f2b6997c6465cbc
           ports:
             - containerPort: 8080
 
