@@ -5,3 +5,7 @@ resources:
   - ../../base
   - istio/gateway.yaml
   - istio/virtual-service.yaml
+  - otel/collector.yaml
+
+patches:
+  - path: otel/app-otel-patch.yaml
