@@ -63,7 +63,8 @@ spec:
   selector:
     app: {name}
   ports:
-    - port: 80
+    - name: http
+      port: 80
       targetPort: {port}
   type: ClusterIP
 """
