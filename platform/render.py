@@ -5,7 +5,7 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 
 contract_path = ROOT / "job-asset-service" / "platform.yaml"
-output_path = ROOT / "k8s" / "job-asset-service.yaml"
+output_path = ROOT / "k8s" / "base" / "job-asset-service.yaml"
 
 with contract_path.open() as f:
     config = yaml.safe_load(f)

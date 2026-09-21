@@ -9,7 +9,7 @@ spec:
   source:
     repoURL: https://github.com/1716964609/tvp-poc.git
     targetRevision: main
-    path: k8s
+    path: k8s/overlays/dev
 
   destination:
     server: https://kubernetes.default.svc
