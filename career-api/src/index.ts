@@ -1,8 +1,73 @@
 import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { db } from './db'
-
+import {
+  context,
+  propagation,
+  trace,
+  SpanStatusCode,
+} from '@opentelemetry/api'
 const app = new Hono()
+
+const tracer = trace.getTracer('career-api')
+
+app.use('*', async (c, next) => {
+  const carrier = Object.fromEntries(
+    c.req.raw.headers.entries()
+  )
+
+  const parentContext = propagation.extract(
+    context.active(),
+    carrier
+  )
+
+  await tracer.startActiveSpan(
+    `${c.req.method} ${c.req.path}`,
+    {},
+    parentContext,
+    async (span) => {
+      try {
+        span.setAttribute(
+          'http.request.method',
+          c.req.method
+        )
+
+        span.setAttribute(
+          'url.path',
+          c.req.path
+        )
+
+        await next()
+
+        span.setAttribute(
+          'http.response.status_code',
+          c.res.status
+        )
+
+        span.setStatus({
+          code:
+            c.res.status >= 500
+              ? SpanStatusCode.ERROR
+              : SpanStatusCode.OK,
+        })
+      } catch (error) {
+        span.recordException(
+          error instanceof Error
+            ? error
+            : new Error(String(error))
+        )
+
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+        })
+
+        throw error
+      } finally {
+        span.end()
+      }
+    }
+  )
+})
 
 const jobServiceUrl =
   process.env.JOB_SERVICE_URL ?? 'http://localhost:8080'
