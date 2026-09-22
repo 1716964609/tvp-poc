@@ -6,6 +6,8 @@ resources:
   - istio/gateway.yaml
   - istio/virtual-service.yaml
   - otel/collector.yaml
+  - otel/jaeger.yaml
 
 patches:
   - path: otel/app-otel-patch.yaml
+
