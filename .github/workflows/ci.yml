@@ -97,6 +97,10 @@ jobs:
         run: |
           python -m pip install -r platform/requirements.txt
 
+      - name: Run platform guardrail tests
+        run: |
+          python platform/test_guardrails.py
+
       - name: Render desired state from platform contract
         run: |
           python platform/render.py

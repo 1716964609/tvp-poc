@@ -29,3 +29,6 @@ __pycache__/
 
 # k6 raw metrics
 load-tests/results/*-metrics.json
+
+# Local platform Python virtualenv
+.venv-platform/
