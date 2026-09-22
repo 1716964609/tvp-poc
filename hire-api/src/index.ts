@@ -112,6 +112,132 @@ app.post('/hire/jobs', async (c) => {
   )
 })
 
+app.get('/', (c) => {
+  return c.html(`
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>Mock Hire</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 720px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+
+    form {
+      display: grid;
+      gap: 12px;
+    }
+
+    input, textarea, button {
+      font: inherit;
+      padding: 10px;
+    }
+
+    textarea {
+      min-height: 100px;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    pre {
+      margin-top: 24px;
+      padding: 16px;
+      background: #f4f4f4;
+      overflow: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>Mock Hire</h1>
+  <p>Create a canonical Job through the Shared Job Domain.</p>
+
+  <form id="job-form">
+    <input name="title" placeholder="Job title" required />
+
+    <textarea
+      name="description"
+      placeholder="Description"
+      required
+    ></textarea>
+
+    <input name="location" value="Tokyo" required />
+
+    <input
+      name="salaryMin"
+      type="number"
+      placeholder="Salary Min"
+      required
+    />
+
+    <input
+      name="salaryMax"
+      type="number"
+      placeholder="Salary Max"
+      required
+    />
+
+    <input
+      name="hiringTeam"
+      placeholder="Hiring Team"
+      required
+    />
+
+    <textarea
+      name="internalNote"
+      placeholder="Internal Note"
+    ></textarea>
+
+    <button type="submit">Create Job</button>
+  </form>
+
+  <pre id="result">Ready.</pre>
+
+  <script>
+    const form = document.getElementById('job-form')
+    const result = document.getElementById('result')
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault()
+
+      const data = new FormData(form)
+
+      const payload = {
+        title: data.get('title'),
+        description: data.get('description'),
+        location: data.get('location'),
+        salaryMin: Number(data.get('salaryMin')),
+        salaryMax: Number(data.get('salaryMax')),
+        hiringTeam: data.get('hiringTeam'),
+        internalNote: data.get('internalNote'),
+      }
+
+      result.textContent = 'Creating...'
+
+      const response = await fetch('/hire/jobs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+
+      const body = await response.json()
+
+      result.textContent =
+        JSON.stringify(body, null, 2)
+    })
+  </script>
+</body>
+</html>
+  `)
+})
+
 serve({
   fetch: app.fetch,
   port: 8081,

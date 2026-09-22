@@ -83,6 +83,130 @@ app.post('/career/saved-jobs', async (c) => {
   return c.json(result.rows[0], 201)
 })
 
+app.get('/', (c) => {
+  return c.html(`
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>Mock Career</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+
+    .job {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+
+    button {
+      font: inherit;
+      padding: 8px 14px;
+      cursor: pointer;
+    }
+
+    #status {
+      margin: 20px 0;
+      padding: 12px;
+      background: #f4f4f4;
+    }
+  </style>
+</head>
+<body>
+  <h1>Mock Career</h1>
+  <p>
+    Jobs are read through the Shared Job Domain.
+  </p>
+
+  <div id="status">Loading jobs...</div>
+  <div id="jobs"></div>
+
+  <script>
+    const jobsContainer = document.getElementById('jobs')
+    const status = document.getElementById('status')
+
+    async function loadJobs() {
+      const response = await fetch('/career/jobs')
+      const jobs = await response.json()
+
+      jobsContainer.innerHTML = ''
+
+      for (const job of jobs) {
+        const element = document.createElement('div')
+        element.className = 'job'
+
+        element.innerHTML = \`
+          <h2>\${job.title}</h2>
+
+          <p>\${job.description}</p>
+
+          <p>
+            <strong>Location:</strong>
+            \${job.location}
+          </p>
+
+          <p>
+            <strong>Salary:</strong>
+            ¥\${job.salaryMin.toLocaleString()}
+            -
+            ¥\${job.salaryMax.toLocaleString()}
+          </p>
+
+          <p>
+            <strong>Status:</strong>
+            \${job.status}
+          </p>
+
+          <button data-job-id="\${job.id}">
+            Save Job
+          </button>
+        \`
+
+        const button = element.querySelector('button')
+
+        button.addEventListener('click', async () => {
+          status.textContent = 'Saving...'
+
+          const response = await fetch(
+            '/career/saved-jobs',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                userId: 'candidate-ui-001',
+                jobId: job.id,
+              }),
+            }
+          )
+
+          const body = await response.json()
+
+          status.textContent =
+            JSON.stringify(body, null, 2)
+        })
+
+        jobsContainer.appendChild(element)
+      }
+
+      status.textContent =
+        \`Loaded \${jobs.length} jobs.\`
+    }
+
+    loadJobs()
+  </script>
+</body>
+</html>
+  `)
+})
+
 serve({
   fetch: app.fetch,
   port: 8082,
