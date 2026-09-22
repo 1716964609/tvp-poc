@@ -24,3 +24,5 @@ __pycache__/
 *.pyc
 
 .env.product-poc
+
+!.env.product-poc.example
