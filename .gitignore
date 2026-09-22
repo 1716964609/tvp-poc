@@ -26,3 +26,6 @@ __pycache__/
 .env.product-poc
 
 !.env.product-poc.example
+
+# k6 raw metrics
+load-tests/results/*-metrics.json
