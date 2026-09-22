@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: tvp-postgres
+    environment:
+      POSTGRES_USER: tvp
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+      POSTGRES_DB: tvp
+
+      JOB_DB_PASSWORD: ${JOB_DB_PASSWORD}
+      HIRE_DB_PASSWORD: ${HIRE_DB_PASSWORD}
+      CAREER_DB_PASSWORD: ${CAREER_DB_PASSWORD}
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - product-poc-postgres:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U tvp -d tvp"
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  product-poc-postgres:

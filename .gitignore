@@ -22,3 +22,5 @@ crash.*.log
 .venv/
 __pycache__/
 *.pyc
+
+.env.product-poc
