@@ -1,5 +1,10 @@
 import { Hono } from 'hono'
-import { trace, SpanStatusCode } from '@opentelemetry/api'
+import {
+  context,
+  propagation,
+  trace,
+  SpanStatusCode,
+} from '@opentelemetry/api'
 import { db } from './db'
 import { randomUUID } from 'node:crypto'
 
@@ -10,12 +15,38 @@ const tracer = trace.getTracer('job-asset-service')
 
 // OTel middleware
 app.use('*', async (c, next) => {
+  const traceparent = c.req.header('traceparent')
+  const tracestate = c.req.header('tracestate')
+  const carrier: Record<string, string> = {}
+
+  if (traceparent) {
+    carrier['traceparent'] = traceparent
+  }
+
+  if (tracestate) {
+    carrier['tracestate'] = tracestate
+  }
+
+  const parentContext = propagation.extract(
+    context.active(),
+    carrier
+  )
+
   await tracer.startActiveSpan(
     `${c.req.method} ${c.req.path}`,
+    {},
+    parentContext,
     async (span) => {
       try {
-        span.setAttribute('http.request.method', c.req.method)
-        span.setAttribute('url.path', c.req.path)
+        span.setAttribute(
+          'http.request.method',
+          c.req.method
+        )
+
+        span.setAttribute(
+          'url.path',
+          c.req.path
+        )
 
         await next()
 
