@@ -1,48 +1,66 @@
-# TVP — Product PoC & Reliability Evidence
+# TVP — Thinnest Viable Platform
 
-TVP (**Thinnest Viable Platform**) is a Developer Platform proof of concept that connects a thin developer-facing contract to delivery, runtime, observability, and reliability mechanisms.
+アプリケーション開発者が扱うインターフェースを小さく保ちながら、Build / Deploy / Run / Observe の共通部分をPlatform側へ集約するためのDeveloper Platform PoCです。
 
-This `product-poc` branch extends the core cloud Golden Path with:
+この `product-poc` branchでは、Core TVPに加えて、Domain Ownership、Distributed Tracing、SLI / SLO、Reliability、Guardrail、ADR、Runbookまで検証範囲を拡張しています。
 
-- a small multi-service Product PoC
-- explicit domain and database ownership
-- distributed tracing with OpenTelemetry and Jaeger
-- SLI / SLO validation with k6
-- Kubernetes self-healing experiments
-- Argo CD desired-state reconciliation experiments
-- Platform Contract guardrails
-- architecture decision records
-- an operational runbook
-
-> This repository is a technical PoC, not a production-ready platform.
+> 本リポジトリは技術検証用PoCです。商用運用済みPlatformを示すものではありません。
 >
-> Technical-report baseline: `9fab35a`
+> 技術状態の固定基準: `9fab35a`
 >
-> B20 end-to-end demo has not been completed yet.
+> B20のend-to-end Demoは未実施です。
 
 ---
 
-## Why This Exists
+## 1. このbranchで確認したこと
 
-The project explores a simple question:
+`product-poc` では、以下を実装・検証しました。
 
-> How much infrastructure complexity can a Platform absorb while keeping ownership, deployment state, failures, and recovery understandable to application developers?
+- Mock Hire / Mock Career / Job Asset Serviceの3サービス構成
+- Job Domainを共有能力として切り出す設計
+- PostgreSQLのschema / roleによるData Ownership
+- OpenTelemetry + JaegerによるDistributed Tracing
+- k6によるSLI / SLO測定
+- KubernetesによるPod self-healing
+- Argo CDによるdesired state self-healing
+- Platform ContractのGuardrail
+- Architecture Decision Record
+- Operational Runbook
 
-The developer-facing entry point remains intentionally small:
+一方で、以下はまだ実証していません。
 
-**code + `platform.yaml` + git push**
+- Node障害
+- AZ障害
+- DB障害
+- Production Authentication / Authorization
+- 長期SLO運用
+- Alert / On-call
+- Automated Rollback
+- Canary / Progressive Delivery
+- Product PoC全体のEKS配備
+- 複数チームでのPlatform adoption
 
-The Platform side takes responsibility for common delivery and runtime concerns.
+実装済み・検証済み・文書化済み・未検証を区別して記録しています。
 
 ---
 
-## Two Validation Scopes
+## 2. TVPの目的
 
-This branch contains two related but distinct technical experiments.
+TVPが検証する中心的な問いは次です。
 
-### 1. Cloud Golden Path
+> DeveloperがInfrastructureの詳細を毎回理解・操作しなくても、安全にBuild / Deploy / Run / Observeできる最小のPlatform interfaceはどこまで薄くできるか。
 
-The original TVP path validates:
+Developer側の入口は、意図的に小さくしています。
+
+~~~text
+code
++
+platform.yaml
++
+git push
+~~~
+
+Platform側が、その後の共通処理を引き受けます。
 
 ~~~text
 Developer
@@ -51,7 +69,31 @@ GitHub Actions
     ↓
 Amazon ECR
     ↓
-Git desired state
+Git Desired State
+    ↓
+Argo CD
+    ↓
+Amazon EKS
+~~~
+
+---
+
+## 3. 二つの検証範囲
+
+このbranchには、関連しているが同一ではない二つの検証があります。
+
+### Cloud Golden Path
+
+Core TVPでは以下を検証しました。
+
+~~~text
+Developer
+    ↓
+GitHub Actions
+    ↓
+Amazon ECR
+    ↓
+Git Desired State
     ↓
 Argo CD
     ↓
@@ -59,12 +101,12 @@ Amazon EKS
     ↓
 Istio
     ↓
-Application
+Job Service
 ~~~
 
-### 2. Local Product PoC
+### Local Product PoC
 
-The Product PoC validates application boundaries, shared-domain ownership, PostgreSQL permissions, and distributed tracing.
+Product PoCでは、業務境界・Data Ownership・Distributed Traceを検証しました。
 
 ~~~text
 Mock Hire ─────┐
@@ -75,11 +117,11 @@ Mock Hire   ──→ hire.job_metadata
 Mock Career ──→ career.saved_jobs
 ~~~
 
-The DB-backed Product PoC is **not currently the same deployed application revision as the thin Job service previously validated on EKS**.
+重要なのは、Cloud側で検証した薄いJob Serviceと、Local Product PoCのDB付きJob Serviceは、現在同一のdeploy済みrevisionではないことです。
 
 ---
 
-## Architecture
+## 4. Architecture
 
 ~~~mermaid
 flowchart TB
@@ -117,7 +159,7 @@ flowchart TB
         Career --> PG
     end
 
-    subgraph Observability["Observability"]
+    subgraph Observe["Observability"]
         OTel["OpenTelemetry Collector"]
         Jaeger["Jaeger"]
     end
@@ -130,13 +172,11 @@ flowchart TB
 
 ---
 
-## Product PoC
-
-The PoC contains three services.
+## 5. Product PoC
 
 ### Job Asset Service
 
-Owns canonical Job data.
+求人という共有Domainの正本を所有します。
 
 ~~~text
 GET  /health
@@ -145,25 +185,23 @@ POST /jobs
 GET  /jobs/:id
 ~~~
 
-Responsibilities:
+主な責任:
 
-- validate Job input
-- create Job identifiers
-- store canonical Job data
-- expose Job data through an API
+- Job入力のvalidation
+- UUID生成
+- canonical Job dataの保存
+- Job APIの提供
 
 ### Mock Hire
 
-Represents a hiring-company-side workflow.
+採用企業側の文脈を表す参照サービスです。
 
 ~~~text
 GET  /health
 POST /hire/jobs
 ~~~
 
-A Job is created through the Job Asset Service.
-
-Hire-specific metadata is stored separately in:
+Job作成自体はJob Asset ServiceのAPI経由で行い、Hire固有の情報だけを次へ保存します。
 
 ~~~text
 hire.job_metadata
@@ -171,7 +209,7 @@ hire.job_metadata
 
 ### Mock Career
 
-Represents a candidate-facing workflow.
+求職者側の文脈を表す参照サービスです。
 
 ~~~text
 GET  /health
@@ -179,9 +217,7 @@ GET  /career/jobs
 POST /career/saved-jobs
 ~~~
 
-Career obtains canonical Job data through the Job API.
-
-Career-specific state is stored in:
+Job情報はJob API経由で取得し、Career固有の状態だけを次へ保存します。
 
 ~~~text
 career.saved_jobs
@@ -189,19 +225,13 @@ career.saved_jobs
 
 ---
 
-## Domain Ownership
+## 6. Data Ownership
 
-The central design rule is:
+中心的な設計原則は次です。
 
-> Shared domain data is owned by one service and consumed through its API instead of being treated as a shared SQL table.
+> 論理的に共有されるDomain dataであっても、全サービスが同じSQL tableを自由に読み書きする設計にはしない。
 
-Canonical Job data belongs to:
-
-~~~text
-Job Asset Service
-~~~
-
-Product-specific data remains with the product context.
+PostgreSQLは物理的には1インスタンスですが、schemaとroleで所有権を分離しています。
 
 | Domain | Schema / Table | DB Role |
 |---|---|---|
@@ -209,13 +239,7 @@ Product-specific data remains with the product context.
 | Hire | `hire.job_metadata` | `hire_service` |
 | Career | `career.saved_jobs` | `career_service` |
 
-PostgreSQL is physically one instance in this PoC, but ownership is separated through schemas and roles.
-
----
-
-## Database Boundary Validation
-
-The following cross-domain access patterns were tested and rejected by PostgreSQL permissions:
+確認した越境アクセス:
 
 ~~~text
 hire_service   → job.jobs
@@ -223,30 +247,28 @@ career_service → job.jobs
 job_service    → hire.job_metadata
 ~~~
 
-The tested calls returned permission errors.
+これらはPostgreSQL側でpermission deniedになりました。
 
-This demonstrates that the application-level ownership rule is also enforced at the tested database-role boundary.
+これは確認したrole / operationにおいてData OwnershipがDB権限でも強制されている証拠です。
 
-It does **not** prove:
+ただし、以下を意味しません。
 
-- complete tenant isolation
-- physical DB isolation
-- every role/action combination
-- protection against database administrators
+- 全role / 全operationの網羅
+- tenant isolation
+- 物理DB分離
+- DBA権限からの完全隔離
 
 ---
 
-## Local PostgreSQL Bootstrap
+## 7. Local PostgreSQL
 
-The database is reproducible from repository files.
-
-Copy the environment template:
+環境変数ファイルを作成します。
 
 ~~~bash
 cp .env.product-poc.example .env.product-poc
 ~~~
 
-Set local development credentials, then start PostgreSQL:
+必要なlocal credentialを設定した後、PostgreSQLを起動します。
 
 ~~~bash
 docker compose \
@@ -255,31 +277,34 @@ docker compose \
   up -d
 ~~~
 
-The PoC uses:
+構成:
 
 ~~~text
 postgres:17-alpine
-host 5433 → container 5432
+
+host 5433
+    ↓
+container 5432
 ~~~
 
-Initialization files:
+初期化:
 
 ~~~text
 database/init/001-schema.sql
 database/init/002-roles.sh
 ~~~
 
-The Compose definition starts PostgreSQL only.
+ComposeはPostgreSQLだけを起動します。
 
-The three application services are run as separate processes.
+3つのApplication Serviceは別processとして起動します。
 
-`docker compose down -v` destroys the named volume and must not be treated as a recovery procedure.
+`docker compose down -v` はnamed volumeを削除するため、Recovery手順としては扱いません。
 
 ---
 
-## Platform Contract
+## 8. Platform Contract
 
-Current developer-facing contract:
+現在のdeveloper-facing contractは次です。
 
 ~~~yaml
 name: job-asset-service
@@ -291,35 +316,35 @@ build:
   strategy: dockerfile
 ~~~
 
-The renderer:
+renderer:
 
 ~~~text
 platform/render.py
 ~~~
 
-converts the contract into Kubernetes Deployment and Service resources.
+がContractを読み取り、Kubernetes Deployment / Serviceへ変換します。
 
-This is intentionally a thin, single-service abstraction rather than a general-purpose Platform API.
+現時点では単一service向けの薄いinterfaceであり、汎用Platform APIではありません。
 
 ---
 
-## Guardrails
+## 9. Guardrail
 
-The Platform Contract validates input before generating Kubernetes resources.
+Platform Contractはmanifest生成前に入力を検証します。
 
-Implemented constraints include:
+主な制約:
 
-- required keys
-- DNS-1123-compatible service names
-- service name length
+- required key
+- DNS-1123互換service name
+- service name長
 - `type: web`
 - `build.strategy: dockerfile`
-- valid TCP port range
-- replicas between 1 and 10
-- image must be provided
-- `:latest` is rejected
+- port範囲
+- replicas 1〜10
+- image必須
+- `:latest`拒否
 
-Generated workloads include default resources and health probes:
+標準runtime設定:
 
 ~~~text
 requests:
@@ -331,62 +356,59 @@ limits:
   memory: 256Mi
 ~~~
 
-Health checks use:
+Health Check:
 
 ~~~text
-/health
+readiness: /health
+liveness:  /health
 ~~~
 
-for readiness and liveness.
-
-The existing local guardrail suite contains 9 test cases.
-
-Run:
+既存test suiteは9ケースです。
 
 ~~~bash
 source .venv-platform/bin/activate
 python platform/test_guardrails.py
 ~~~
 
-These guardrails do not replace Kubernetes admission policy, RBAC, NetworkPolicy, Pod Security, image signing, or vulnerability policy.
+これはAdmission Policy、RBAC、NetworkPolicy、Pod Security、Image Signing等の代替ではありません。
 
 ---
 
-## CI
+## 10. CI
 
-The core CI path uses GitHub Actions.
+GitHub Actionsの基本経路:
 
 ~~~text
 Checkout
-   ↓
+    ↓
 AWS OIDC
-   ↓
+    ↓
 ECR Login
-   ↓
+    ↓
 Docker Build
-   ↓
+    ↓
 /health Smoke Test
-   ↓
+    ↓
 ECR Push
-   ↓
+    ↓
 Guardrail Test
-   ↓
+    ↓
 Manifest Render
-   ↓
+    ↓
 GitOps Commit
 ~~~
 
-Images use the Git source SHA as the tag.
+Container Imageにはsource Git SHAをtagとして使用します。
 
-The ECR repository is configured with immutable tags.
+ECRはimmutable tag設定です。
 
-The GitHub Actions role publishes images to ECR but does not directly deploy workloads into Kubernetes.
+CI roleはECRへimageをpublishしますが、Kubernetesへ直接deployしません。
 
 ---
 
-## GitOps
+## 11. GitOps
 
-Application desired state is stored in Git.
+Application Desired StateはGitで管理します。
 
 ~~~text
 k8s/
@@ -396,28 +418,29 @@ k8s/
     └── prod/
 ~~~
 
-Argo CD reconciles the Git state into EKS.
-
-Kustomize manages environment differences.
-
-These responsibilities are intentionally separate:
+責任を分離しています。
 
 ~~~text
 Kustomize
-    = construct manifests
+    ↓
+Manifestを組み立てる
 
 Argo CD
-    = compare Git desired state with live state
+    ↓
+GitとLive Stateの差を検知・修復する
 
 Kubernetes
-    = maintain runtime state
+    ↓
+Live Runtime Stateを維持する
 ~~~
+
+`prod` overlayが存在することはProduction品質の成立を意味しません。
 
 ---
 
-## Istio
+## 12. Istio
 
-The validated Istio scope is deliberately small.
+Istioの検証範囲は最小限です。
 
 ~~~text
 HTTP Client
@@ -431,47 +454,39 @@ Kubernetes Service
 Job Pods
 ~~~
 
-Example local tunnel:
+Local access:
 
 ~~~bash
 kubectl port-forward -n istio-system \
   svc/istio-ingressgateway 18080:80
 ~~~
 
-Then:
-
 ~~~bash
 curl -i http://localhost:18080/health
 ~~~
 
-Not validated in this PoC:
+未検証:
 
 - mTLS policy
-- retry policy
-- circuit breaking
-- rate limiting
-- canary delivery
+- retry
+- circuit breaker
+- rate limit
+- canary
 - public HTTPS ingress
 
 ---
 
-## OpenTelemetry
+## 13. OpenTelemetry / Jaeger
 
-The application services initialize OpenTelemetry before application startup.
+Application ServiceはOpenTelemetryでinstrumentationしています。
 
-Observed instrumentation includes:
+確認対象:
 
 - inbound HTTP
 - outbound HTTP
-- PostgreSQL operations
+- PostgreSQL operation
 
-Each service has a distinct:
-
-~~~text
-service.name
-~~~
-
-Trace transport:
+Trace path:
 
 ~~~text
 Application
@@ -483,7 +498,7 @@ OpenTelemetry Collector
 Jaeger
 ~~~
 
-Collector ports:
+Collector:
 
 ~~~text
 OTLP HTTP  4318
@@ -496,7 +511,7 @@ Jaeger UI:
 16686
 ~~~
 
-Useful local tunnels:
+Tunnel例:
 
 ~~~bash
 kubectl port-forward svc/otel-collector 4318:4318
@@ -508,11 +523,9 @@ kubectl port-forward svc/jaeger 16686:16686
 
 ---
 
-## Distributed Trace Validation
+## 14. Distributed Trace
 
-A cross-service trace was observed across the Product PoC.
-
-Example path:
+以下のservice境界をまたぐtraceを確認しました。
 
 ~~~text
 career-api
@@ -522,56 +535,48 @@ job-asset-service
 PostgreSQL
 ~~~
 
-The same Trace ID could be followed through service boundaries and database spans.
+同一Trace IDからHTTP spanとDB spanを追跡できます。
 
-During implementation, manual `traceparent` propagation was initially combined with automatic HTTP instrumentation.
+実装途中では、manualな`traceparent` injectionとHTTP auto instrumentationを同時使用したため、headerが二重伝播しtraceが分割される問題が発生しました。
 
-That produced duplicate propagation and split traces.
-
-The manual injection was removed so automatic instrumentation could propagate the context once.
-
-This debugging result is part of the technical evidence of the PoC.
+manual injectionを削除し、auto instrumentationに伝播を一本化することで修正しました。
 
 ---
 
-## Observability Scope
+## 15. Observabilityの範囲
 
-The implemented observability proof is primarily **distributed tracing**.
+現在のObservability PoCはDistributed Tracingが中心です。
 
-Implemented:
+実装済み:
 
-- OpenTelemetry application instrumentation
+- OpenTelemetry SDK
 - OTel Collector
 - Jaeger
-- service-to-service tracing
-- DB spans
+- Service-to-Service Trace
+- DB Span
 
-Not implemented as a persistent operational platform:
+常設運用基盤として未実装:
 
-- Prometheus-based continuous metric collection
-- centralized log search
-- SLO dashboards
-- automated alerting
-- on-call notification
-- error-budget-based release control
+- Prometheus等による継続Metrics
+- Centralized Log Search
+- SLO Dashboard
+- Alert
+- On-call Notification
+- Error Budget based Release Control
 
-k6 results are test evidence and should not be described as continuous SLO monitoring.
+k6結果は実験データであり、常時SLO Monitoringではありません。
 
 ---
 
-## SLI / SLO
+## 16. SLI / SLO
 
-Two user journeys were selected.
+User Journeyを起点に二つのSLI / SLOを設定しました。
 
 ### Browse Jobs
 
 ~~~text
 GET /career/jobs
-~~~
 
-Validation target:
-
-~~~text
 Availability > 99%
 p95 latency < 500 ms
 ~~~
@@ -580,24 +585,20 @@ p95 latency < 500 ms
 
 ~~~text
 POST /hire/jobs
-~~~
 
-Validation target:
-
-~~~text
 Availability > 99%
 p95 latency < 1000 ms
 ~~~
 
-These are **TVP validation targets**, not production SLOs.
+これはTVP検証用の目標値であり、商用Production SLOではありません。
 
 ---
 
-## k6 Results
+## 17. k6結果
 
-Each scenario ran for three minutes.
+各scenarioを3分間実行しました。
 
-### Browse
+### Browse Jobs
 
 ~~~text
 Rate:       10 requests/s
@@ -607,7 +608,7 @@ p95:        9.011 ms
 Max:        17.211 ms
 ~~~
 
-### Publish
+### Publish Job
 
 ~~~text
 Rate:       1 request/s
@@ -617,41 +618,34 @@ p95:        11.549 ms
 Max:        20.045 ms
 ~~~
 
-Combined:
+合計:
 
 ~~~text
 1,982 requests
 0 observed HTTP failures
 ~~~
 
-The tests were executed against the **local Product PoC**.
+測定対象はLocal Product PoCです。
 
-They were not measurements of public Internet traffic or the EKS production-like path.
+EKS経由のProduction-like performanceではありません。
 
-They do not establish long-term SLO compliance or production capacity.
+また、短時間のSynthetic Testであり、長期SLO達成やProduction Capacityを示すものではありません。
 
 ---
 
-## Reliability Experiment A — Kubernetes Self-Healing
+## 18. Reliability Experiment A — Kubernetes Self-Healing
 
-The first controlled experiment tested Kubernetes runtime reconciliation.
-
-Initial state:
+条件:
 
 ~~~text
-Job Deployment
 replicas = 2
+5 RPS
+3 minutes
 ~~~
 
-Traffic:
+Traffic中にPodを1つ削除しました。
 
-~~~text
-5 RPS for 3 minutes
-~~~
-
-One Pod was manually deleted while traffic was running.
-
-Observed timeline:
+Timeline:
 
 ~~~text
 02:03:50  Pod deleted
@@ -662,7 +656,7 @@ Observed timeline:
 Observed recovery:
 
 ~~~text
-approximately 4 seconds
+約4秒
 ~~~
 
 Traffic result:
@@ -674,29 +668,29 @@ Traffic result:
 p95 81.316 ms
 ~~~
 
-The controller responsible for recovery was Kubernetes Deployment / ReplicaSet reconciliation.
+この復旧主体はKubernetes Deployment / ReplicaSetです。
 
-This was a **Pod failure experiment**, not a Node or Availability Zone failure experiment.
+Argo CDではありません。
+
+また、これはPod Failureの検証であり、Node FailureやAZ Failureではありません。
 
 ---
 
-## Reliability Experiment B — Argo CD Self-Healing
+## 19. Reliability Experiment B — Argo CD Self-Healing
 
-The second experiment tested desired-state reconciliation.
-
-Git remained:
+Git Desired State:
 
 ~~~text
 replicas = 2
 ~~~
 
-The live Deployment was manually changed to:
+のまま、Live Deploymentだけを手動で次へ変更しました。
 
 ~~~text
 replicas = 1
 ~~~
 
-Observed state transitions:
+Observed state:
 
 ~~~text
 Synced / Healthy
@@ -708,13 +702,13 @@ Synced / Progressing
 Synced / Healthy
 ~~~
 
-Final runtime state:
+Final state:
 
 ~~~text
 2 / 2 Ready
 ~~~
 
-Traffic result:
+Traffic:
 
 ~~~text
 901 requests
@@ -723,107 +717,94 @@ Traffic result:
 p95 103.926 ms
 ~~~
 
-The responsibilities are different:
+この実験で確認した役割分担:
 
 ~~~text
 Kubernetes
-    maintains the current Deployment specification
+    ↓
+現在のDeployment specを維持する
 
 Argo CD
-    restores the Deployment specification to the Git desired state
+    ↓
+Live specをGit Desired Stateへ戻す
 ~~~
 
 ---
 
-## Reliability Evidence
+## 20. Reliability Evidence
 
-The repository contains test scripts and saved summaries under:
+Load Test:
 
 ~~~text
 load-tests/
 ~~~
 
-The controlled experiment write-up is:
+Reliability Experiment Report:
 
 ~~~text
 docs/b16-reliability-experiment.md
 ~~~
 
-The document records:
-
-- hypothesis
-- injected failure
-- observed behavior
-- recovery mechanism
-- test results
-- limitations
-
-It is a **controlled reliability experiment**, not a production incident postmortem.
+B16はProduction IncidentのPostmortemではなく、Controlled Reliability Experimentの記録です。
 
 ---
 
-## Architecture Decision Records
+## 21. ADR
 
-Architecture decisions are documented in:
+Architecture Decision Record:
 
 ~~~text
 docs/b18-architecture-decisions.md
 ~~~
 
-The ADR set records decisions around:
+主な判断:
 
-- Git desired state
-- Platform Contract
-- guardrails
-- Kustomize
-- limited Istio usage
-- OpenTelemetry and Jaeger
-- shared Job Domain ownership
-- local Product PoC vs cloud Golden Path
-- GitHub Actions OIDC
-- immutable image tags
-
-The purpose is to record not only what was built, but why the implementation boundary was chosen.
+- GitをDesired StateのSource of Truthにする
+- Platform Contractを薄く保つ
+- Contract境界でGuardrailを置く
+- Environment差分にKustomizeを使う
+- Istio利用範囲を限定する
+- OpenTelemetry + Jaegerを使う
+- Job DomainのOwnershipを明確化する
+- Local Product PoCとCloud Golden Pathを分離する
+- GitHub ActionsからAWSへOIDC接続する
+- Immutable SHA imageを使う
 
 ---
 
-## Operational Runbook
+## 22. Operational Runbook
 
-Operational procedures are documented in:
+Runbook:
 
 ~~~text
 docs/b19-operational-runbook.md
 ~~~
 
-Topics include:
+扱う内容:
 
-- Pod failure
-- Argo CD drift
-- unhealthy application
-- missing traces
-- Collector / Jaeger diagnosis
-- CI failure
-- renderer / guardrail failure
-- Git bot race
-- Istio capacity issue
-- local DB reconstruction
-- rollback procedure
-- incident evidence collection
-- recovery exit criteria
+- Pod Failure
+- Argo CD Drift
+- Unhealthy Application
+- Missing Trace
+- Collector / Jaeger Diagnosis
+- CI Failure
+- Renderer / Guardrail Failure
+- Git Bot Race
+- Istio Capacity Issue
+- Local DB Reconstruction
+- Rollback Procedure
+- Incident Evidence Collection
+- Recovery Exit Criteria
 
-The Runbook is an operational baseline for this PoC.
-
-It is not a complete production on-call process.
+これはPoCのOperational Baselineであり、Production On-call Processではありません。
 
 ---
 
-## Current Rollback Status
+## 23. Rollbackの現在地
 
-Rollback is currently **documented but not experimentally validated as an end-to-end bad-release recovery**.
+Rollback手順はRunbookへ記録しています。
 
-The Runbook describes returning Git desired state to a known-good revision.
-
-However, the project has not yet injected a bad application release and measured:
+ただし、Bad Releaseを意図的に投入し、
 
 ~~~text
 Bad Release
@@ -839,31 +820,35 @@ Argo Reconciliation
 User Recovery
 ~~~
 
-Therefore automated or proven application rollback is not claimed.
+までをend-to-endで測定した実験はまだ行っていません。
+
+したがって、Automated RollbackやValidated Rollbackは主張しません。
 
 ---
 
-## Important Branch Boundary
+## 24. Branch Boundary
 
-`product-poc` must not currently be treated as a drop-in replacement for the cloud `main` branch.
+`product-poc` をそのまま `main` のCloud Deploymentへmergeできる状態ではありません。
 
-The DB-backed Job service requires:
+現在のDB付きJob Serviceは:
 
 ~~~text
 DATABASE_URL
 ~~~
 
-The existing cloud CI smoke path and EKS workload configuration do not yet provide that database dependency.
+を必須とします。
 
-Therefore:
+一方、既存Cloud CIのSmoke TestとEKS Workloadは、このDB dependencyをまだ提供していません。
 
-> Do not blindly merge `product-poc` into the existing cloud deployment path.
+そのため、
 
-The local Product PoC and the cloud Golden Path remain separate validated scopes until the integration is intentionally designed and tested.
+> `product-poc` を既存Cloud Golden Pathへ無条件に昇格しない。
+
+という境界を置いています。
 
 ---
 
-## Repository Areas
+## 25. Repository Structure
 
 ~~~text
 .
@@ -880,131 +865,127 @@ The local Product PoC and the cloud Golden Path remain separate validated scopes
 └── platform/
 ~~~
 
-Responsibilities:
-
 | Path | Responsibility |
 |---|---|
-| `.github/workflows/` | CI and GitOps update |
-| `argocd/` | Argo CD application definition |
-| `infra/` | Terraform / AWS foundation |
-| `job-asset-service/` | shared Job Domain |
-| `hire-api/` | hiring-side reference product |
-| `career-api/` | candidate-side reference product |
-| `database/` | schema and role bootstrap |
-| `platform/` | Platform Contract renderer and guardrails |
-| `k8s/` | Kubernetes / Kustomize / Istio / observability manifests |
-| `load-tests/` | SLI and reliability experiments |
-| `docs/` | experiment report, ADRs, Runbook |
+| `.github/workflows/` | CI / GitOps update |
+| `argocd/` | Argo CD Application |
+| `infra/` | Terraform / AWS Foundation |
+| `job-asset-service/` | Shared Job Domain |
+| `hire-api/` | Hiring-side reference service |
+| `career-api/` | Candidate-side reference service |
+| `database/` | Schema / Role bootstrap |
+| `platform/` | Platform Contract / Renderer / Guardrail |
+| `k8s/` | Kubernetes / Kustomize / Istio / Observability |
+| `load-tests/` | SLI / Reliability Experiment |
+| `docs/` | Experiment / ADR / Runbook |
 
 ---
 
-## B01–B20 Status
+## 26. B01–B20 Status
 
 | Block | Status |
 |---|---|
-| B01 README | completed by this README |
-| B02 AWS Foundation | implemented |
-| B03 EKS Runtime | implemented / previously validated |
-| B04 Platform Contract | implemented |
-| B05 CI | implemented |
-| B06 GitOps | implemented |
-| B07 Argo CD | implemented / validated |
-| B08 Kustomize | implemented |
-| B09 Istio | minimal implementation / validated |
-| B10 Shared Domain | implemented |
-| B11 Product PoC | implemented locally |
-| B12 DB Ownership | implemented / tested |
-| B13 Observability | distributed tracing validated |
-| B14 SLI / SLO | defined and measured |
-| B15 Reliability | two controlled experiments completed |
-| B16 Reliability Report | documented |
-| B17 Guardrails | implemented / tested |
-| B18 ADR | documented |
-| B19 Runbook | documented |
-| B20 Demo | not completed |
+| B01 README | Completed |
+| B02 AWS Foundation | Implemented |
+| B03 EKS Runtime | Implemented / Validated |
+| B04 Platform Contract | Implemented |
+| B05 CI | Implemented |
+| B06 GitOps | Implemented |
+| B07 Argo CD | Implemented / Validated |
+| B08 Kustomize | Implemented |
+| B09 Istio | Minimal Implementation / Validated |
+| B10 Shared Domain | Implemented |
+| B11 Product PoC | Implemented Locally |
+| B12 DB Ownership | Implemented / Tested |
+| B13 Observability | Distributed Trace Validated |
+| B14 SLI / SLO | Defined / Measured |
+| B15 Reliability | Two Controlled Experiments |
+| B16 Reliability Report | Documented |
+| B17 Guardrail | Implemented / Tested |
+| B18 ADR | Documented |
+| B19 Runbook | Documented |
+| B20 Demo | Not Completed |
 
 ---
 
-## Known Limitations
+## 27. Known Limitations
 
-This PoC does not claim validation of:
+未実装・未検証:
 
-- production authentication / authorization
-- tenant isolation
-- production secrets management
-- schema migration lifecycle
-- PostgreSQL backup / PITR
-- distributed transaction recovery
-- full API test coverage
-- node failure
-- Availability Zone failure
-- database failure
-- Kubernetes control-plane failure
-- multi-region operation
-- public production ingress
-- long-term SLO monitoring
-- automated alerting
-- production on-call
-- automated rollback
-- canary deployment
-- progressive delivery
-- full service-mesh policy
-- production security hardening
-- multi-team Platform adoption
-- business productivity improvement
-
-The scope is intentionally narrow enough that each claim can be tied to implementation or evidence.
+- Production Authentication / Authorization
+- Tenant Isolation
+- Production Secrets Management
+- Schema Migration Lifecycle
+- PostgreSQL Backup / PITR
+- Distributed Transaction Recovery
+- Full API Test Coverage
+- Node Failure
+- AZ Failure
+- DB Failure
+- Kubernetes Control Plane Failure
+- Multi-region Operation
+- Public Production Ingress
+- Long-term SLO Monitoring
+- Automated Alerting
+- Production On-call
+- Automated Rollback
+- Canary Deployment
+- Progressive Delivery
+- Full Service Mesh Policy
+- Production Security Hardening
+- Multi-team Platform Adoption
+- Business Productivity Improvement
 
 ---
 
-## Design Principles
+## 28. Design Principles
 
-### Thin interface
+### Thin Interface
 
-Expose developer intent instead of exposing every infrastructure implementation detail.
+DeveloperにはInfrastructure implementationではなく、必要なintentを見せる。
 
-### Explicit ownership
+### Explicit Ownership
 
-Shared data should still have an identifiable owner.
+共有されるDomain Dataにも明確なownerを持たせる。
 
-### Git desired state
+### Git Desired State
 
-Delivery state should be reviewable and reproducible.
+Deployment Stateをreview可能・再現可能にする。
 
-### Separate reconciliation loops
+### Separate Reconciliation Loops
 
-Kubernetes runtime reconciliation and Argo CD Git reconciliation solve different problems.
+KubernetesとArgo CDが何を修復するのかを混同しない。
 
-### Observe user journeys
+### User JourneyからReliabilityを見る
 
-Reliability should be discussed in terms of user-visible operations, not only CPU and Pod status.
+CPUやPodだけではなく、Userが操作を完了できるかをSLIにする。
 
-### Fail visibly
+### Fail Visibly
 
-A self-service abstraction is incomplete if users cannot understand why it failed.
+Self-serviceであっても、失敗理由と次の行動が分からなければPlatformとして不十分と考える。
 
-### Evidence before claims
+### Evidence Before Claims
 
-Implemented, tested, documented, and untested states are intentionally distinguished.
+「実装した」「試した」「文書化した」「まだ試していない」を区別する。
 
-### Small before generic
+### Small Before Generic
 
-The goal is not to build the largest Platform.
-
-The goal is to validate the smallest architecture that demonstrates the responsibility boundaries clearly.
+万能Platformを最初から作らず、最小のGolden Pathから責任境界を検証する。
 
 ---
 
-## Next Direction — TVP v2
+## 29. Next — TVP v2
 
-The next iteration will focus on evolving the Platform Contract toward a more realistic service interface.
+次のiterationでは、Platform ContractをよりBusiness / Operationに近いinterfaceへ進化させます。
 
-Candidate contract concepts include:
+候補:
 
 ~~~text
 owner
-runtime profile
-resource class
+serviceType
+runtimeProfile
+resources
+routing
 data dependency
 secret reference
 observability profile
@@ -1013,20 +994,22 @@ runbook reference
 recovery policy
 ~~~
 
-The intention is not to add every possible Platform feature.
+ただし、項目を増やすこと自体を目的にはしません。
 
-The next version should extend the contract only where a concrete Platform responsibility can be implemented, validated, and explained.
+実際にPlatformが責任を持ち、実装・検証・説明できる範囲だけをContractへ追加します。
 
 ---
 
-## Project Status
+## 30. Current Status
 
-Current technical baseline:
+Current branch:
 
 ~~~text
-product-poc @ 9fab35a
+product-poc
 ~~~
 
-B01–B19 are represented by implementation, experiments, or operational documentation with the limitations described above.
+B01〜B19は、実装・実験・設計判断・Runbookとして記録されています。
 
-B20 — the final end-to-end demo — remains the next presentation-oriented milestone.
+次の技術的な焦点はTVP v2のPlatform Contractです。
+
+B20はその後、end-to-end Demoとして実施予定です。
